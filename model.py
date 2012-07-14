@@ -108,6 +108,6 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         except IndexError:
             return None
 
-    def on_iter_parent(child):
+    def do_iter_parent(child):
         return None
 
