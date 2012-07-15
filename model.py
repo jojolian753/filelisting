@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os, stat, time
+from os import path
 
 import gi; gi.require_version('Gtk', '3.0')
 from gi.repository import GObject, Gtk, GdkPixbuf
@@ -16,26 +17,25 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
 
     def __init__(self, dname=None):
         super(FileListModel, self).__init__()
-        if not dname:
-            self.dirname = os.path.expanduser('~')
-        else:
+
+        if dname:
             self.dirname = os.path.abspath(dname)
-        self.files = [f for f in os.listdir(self.dirname) if f[0] <> '.']
+        else:
+            self.dirname = os.path.expanduser('~')
+
+        self.files = os.listdir(self.dirname)
         self.files.sort()
-        self.files = ['..'] + self.files
-        return
+        self.files.insert(0, '..')
 
     def get_pathname(self, path):
-        filename = self.files[path[0]]
-        return os.path.join(self.dirname, filename)
+        filename = self.files[list(path)[0]]
+        return path.join(self.dirname, filename)
 
     def is_folder(self, path):
-        filename = self.files[path[0]]
-        pathname = os.path.join(self.dirname, filename)
-        filestat = os.stat(pathname)
-        if stat.S_ISDIR(filestat.st_mode):
-            return True
-        return False
+        filename = self.files[list(path)[0]]
+        pathname = path.join(self.dirname, filename)
+
+        return path.isdir(pathname)
 
     def get_column_names(self):
         return self.column_names[:]
@@ -49,28 +49,36 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
     def do_get_column_type(self, n):
         return self.column_types[n]
 
-    def do_get_iter(self, path):
-        idx = list(path)[0]
-        print("get_iter works")
-        return self.files[idx]
+    def do_get_iter(self, tree_path):
+        print("get_iter: {0!s} and {1!s}".format(tree_path, list(tree_path)))
+        idx = list(tree_path)[0]
+        print("get_iter: idx is {0}".format(idx))
+        res = Gtk.TreeIter()
+        stamp = hash(self.files[idx]) >> 24
+        print("stamp is {0}".format(stamp))
+        res.user_data = self.files[idx]
+        res.stamp = stamp
+        print("get_iter: user_data is {0}".format(res.user_data))
+
+        return (True, stamp)
 
     def do_get_path(self, rowref):
-        return self.files.index(rowref)
+        return self.files.index(rowref.user_data)
 
     def do_get_value(self, rowref, column):
-        fname = os.path.join(self.dirname, rowref)
+        fname = os.path.join(self.dirname, rowref.user_data)
         try:
             filestat = os.stat(fname)
         except OSError:
             return None
-        mode = filestat.st_mode
+
         if column is 0:
-            if stat.S_ISDIR(mode):
+            if path.isdir(fname):
                 return folderpb
             else:
                 return filepb
         elif column is 1:
-            return rowref
+            return rowref.user_data
         elif column is 2:
             return filestat.st_size
         elif column is 3:
@@ -78,14 +86,19 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         return time.ctime(filestat.st_mtime)
 
     def do_iter_next(self, rowref):
+        print
+        print('stamp is:\n{0}'.format(rowref.stamp))
+        print('user_data is:\n{0}'.format(rowref.user_data))
+        print('user_data2 is:\n{0}'.format(rowref.user_data2))
+        print('user_data3 is:\n{0}'.format(rowref.user_data3))
+        print
         try:
-            i = self.files.index(rowref)+1
-            return self.files[i]
-        except IndexError:
-            return None
-        except ValueError as exc:
+            i = self.files.index(rowref.user_data)+1
+        except (TypeError, IndexError, ValueError) as exc:
             print(exc)
-            Gtk.main_quit()
+            return None
+        else:
+            return (True, self.files[i])
 
     def do_iter_children(self, rowref, parent_iter):
         if rowref:
