@@ -77,7 +77,7 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         self.myiter.stamp = stamp
         print("get_iter: user_data is {0}".format(self.myiter.user_data))
 
-        return (True, self.myiter)
+        return self.myiter
 
     def do_get_path(self, rowref):
         return self.files.index(rowref.user_data)
