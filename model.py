@@ -18,6 +18,9 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
     def __init__(self, dname=None):
         super(FileListModel, self).__init__()
 
+        self.myiter = Gtk.TreeIter()
+        self.myiter.stamp = 4
+
         if dname:
             self.dirname = os.path.abspath(dname)
         else:
@@ -27,6 +30,7 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         self.files.sort()
         self.files.insert(0, '..')
 
+    # code to refactor out
     def get_pathname(self, path):
         filename = self.files[list(path)[0]]
         return path.join(self.dirname, filename)
@@ -40,6 +44,19 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
     def get_column_names(self):
         return self.column_names[:]
 
+    # Signals
+    def do_row_changed(self, tree_path, tree_iter):
+        pass
+
+    def do_row_inserted(self, tree_path, tree_iter):
+        pass
+
+    def do_row_has_child_toggled(self, tree_path, tree_iter):
+        pass
+
+    def do_row_deleted(self, tree_path):
+        pass
+
     def do_get_flags(self):
         return Gtk.TreeModelFlags.LIST_ONLY|Gtk.TreeModelFlags.ITERS_PERSIST
 
@@ -50,17 +67,17 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         return self.column_types[n]
 
     def do_get_iter(self, tree_path):
-        print("get_iter: {0!s} and {1!s}".format(tree_path, list(tree_path)))
         idx = list(tree_path)[0]
         print("get_iter: idx is {0}".format(idx))
-        res = Gtk.TreeIter()
+
         stamp = hash(self.files[idx]) >> 24
         print("stamp is {0}".format(stamp))
-        res.user_data = self.files[idx]
-        res.stamp = stamp
-        print("get_iter: user_data is {0}".format(res.user_data))
 
-        return (True, stamp)
+        self.myiter.user_data = self.files[idx]
+        self.myiter.stamp = stamp
+        print("get_iter: user_data is {0}".format(self.myiter.user_data))
+
+        return (True, self.myiter)
 
     def do_get_path(self, rowref):
         return self.files.index(rowref.user_data)
