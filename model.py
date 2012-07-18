@@ -7,9 +7,12 @@ import gi; gi.require_version('Gtk', '3.0')
 from gi.repository import GObject, Gtk, GdkPixbuf
 
 
+# -----------------------------------------------------------------------------
+
 folderpb = GdkPixbuf.Pixbuf.new_from_file_at_size('folder.png', 16, 16)
 filepb = GdkPixbuf.Pixbuf.new_from_file_at_size('note.png', 16, 16)
 
+# -----------------------------------------------------------------------------
 
 class FileListModel(GObject.Object, Gtk.TreeModel):
     column_types = (GdkPixbuf.Pixbuf, str, long, str, str)
@@ -17,9 +20,6 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
 
     def __init__(self, dname=None):
         super(FileListModel, self).__init__()
-
-        self.myiter = Gtk.TreeIter()
-        self.myiter.stamp = 4
 
         if dname:
             self.dirname = os.path.abspath(dname)
@@ -30,13 +30,14 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         self.files.sort()
         self.files.insert(0, '..')
 
-    # code to refactor out
-    def get_pathname(self, path):
-        filename = self.files[list(path)[0]]
-        return path.join(self.dirname, filename)
+    def get_pathname(self, tree_path):
+        filename = self.files[tree_path.get_indices()[0]]
+        res = path.join(self.dirname, filename)
 
-    def is_folder(self, path):
-        filename = self.files[list(path)[0]]
+        return res
+
+    def is_folder(self, tree_path):
+        filename = self.files[tree_path.get_indices()[0]]
         pathname = path.join(self.dirname, filename)
 
         return path.isdir(pathname)
@@ -44,19 +45,9 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
     def get_column_names(self):
         return self.column_names[:]
 
-    # Signals
-    def do_row_changed(self, tree_path, tree_iter):
-        pass
+    # -------------------------------------------------------------------------
 
-    def do_row_inserted(self, tree_path, tree_iter):
-        pass
-
-    def do_row_has_child_toggled(self, tree_path, tree_iter):
-        pass
-
-    def do_row_deleted(self, tree_path):
-        pass
-
+    # Interface implementation
     def do_get_flags(self):
         return Gtk.TreeModelFlags.LIST_ONLY|Gtk.TreeModelFlags.ITERS_PERSIST
 
@@ -67,77 +58,97 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         return self.column_types[n]
 
     def do_get_iter(self, tree_path):
-        idx = list(tree_path)[0]
-        print("get_iter: idx is {0}".format(idx))
+        idx = tree_path.get_indices()[0]
 
-        stamp = hash(self.files[idx]) >> 24
-        print("stamp is {0}".format(stamp))
+        aiter = Gtk.TreeIter()
+        stamp = 4
 
-        self.myiter.user_data = self.files[idx]
-        self.myiter.stamp = stamp
-        print("get_iter: user_data is {0}".format(self.myiter.user_data))
+        aiter.user_data = self.files[idx]
+        aiter.stamp = stamp
 
-        return self.myiter
+        return (True, aiter)
 
     def do_get_path(self, rowref):
-        return self.files.index(rowref.user_data)
+#        try:
+        res = Gtk.TreePath((self.files.index(rowref.user_data),))
+#        except ValueError:
+#            res = Gtk.TreePath((0,))
+        return res
 
     def do_get_value(self, rowref, column):
-        fname = os.path.join(self.dirname, rowref.user_data)
+        bname = rowref.user_data
+        fname = path.join(self.dirname, bname)
         try:
             filestat = os.stat(fname)
-        except OSError:
-            return None
+        except OSError as exc:
+            print("get_value: file not found!\n\n{0}".format(exc))
 
+            return None
+        mode = filestat.st_mode
         if column is 0:
-            if path.isdir(fname):
+            if stat.S_ISDIR(mode):
                 return folderpb
             else:
                 return filepb
+
         elif column is 1:
             return rowref.user_data
+
         elif column is 2:
             return filestat.st_size
+
         elif column is 3:
             return oct(stat.S_IMODE(mode))
+
         return time.ctime(filestat.st_mtime)
 
     def do_iter_next(self, rowref):
-        print
-        print('stamp is:\n{0}'.format(rowref.stamp))
-        print('user_data is:\n{0}'.format(rowref.user_data))
-        print('user_data2 is:\n{0}'.format(rowref.user_data2))
-        print('user_data3 is:\n{0}'.format(rowref.user_data3))
-        print
+        i = self.files.index(rowref.user_data)+1
         try:
-            i = self.files.index(rowref.user_data)+1
-        except (TypeError, IndexError, ValueError) as exc:
+            rowref.user_data = self.files[i]
+        except IndexError:
+            rowref.stamp = -1
+            return (False, rowref)
+        except (TypeError, ValueError) as exc:
             print(exc)
-            return None
+            rowref.stamp = -1
+            return (False, rowref)
         else:
-            return (True, self.files[i])
+            return (True, rowref)
 
     def do_iter_children(self, rowref, parent_iter):
-        if rowref:
-            return None
-        return self.files[0]
+        print("iter_children: function")
+        if rowref.user_data:
+            rowref.user_data = None
+            return (False, rowref)
+        else:
+            rowref.user_data = self.files[0]
+            return (True, rowref)
 
     def do_iter_has_child(self, rowref):
+        print("iter_has_child: function")
         return False
 
     def do_iter_n_children(self, rowref):
-        if rowref:
+        print("iter_n_children: function")
+        if rowref.user_data:
             return 0
         return len(self.files)
 
-    def do_iter_nth_child(self, rowref, parent_iter, n):
-        if rowref:
-            return None
+    def do_iter_nth_child(self, parent_iter, n):
+        print("iter_nth_child: function")
+        if parent_iter:
+            return (False, None)
         try:
-            return self.files[n]
+            rowref = Gtk.TreeIter()
+            rowref.user_data = self.files[n]
+            return (True, rowref)
         except IndexError:
-            return None
+            return (False, rowref)
 
     def do_iter_parent(child):
-        return None
+        print("iter_parent: function")
 
+        return (False, Gtk.TreeIter())
+
+# -----------------------------------------------------------------------------
