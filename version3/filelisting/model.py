@@ -7,15 +7,25 @@ import gi; gi.require_version('Gtk', '3.0')
 from gi.repository import GObject, Gtk, GdkPixbuf
 
 
-folderpb = GdkPixbuf.Pixbuf.new_from_file_at_size('folder.png', 16, 16)
-filepb = GdkPixbuf.Pixbuf.new_from_file_at_size('note.png', 16, 16)
+folderpb = GdkPixbuf.Pixbuf.new_from_file_at_size('res/folder.png', 16, 16)
+filepb = GdkPixbuf.Pixbuf.new_from_file_at_size('res/note.png', 16, 16)
+
+
+class ListingOptions(object):
+    MERGED_SORT = 0
+    SORTED_MERGE = 1
+    UNSORTED = 2
 
 
 class FileListModel(GObject.Object, Gtk.TreeModel):
+    __gsignals__ = {
+        "filelist-mode-set": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
+    }
+
     column_types = (GdkPixbuf.Pixbuf, str, long, str, str)
     column_names = ['Name', 'Size', 'Mode', 'Last Changed']
 
-    def __init__(self, dname=None):
+    def __init__(self, dname=None, mode_code=0):
         super(FileListModel, self).__init__()
 
         if dname:
@@ -23,9 +33,9 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         else:
             self.dirname = os.path.expanduser('~')
 
-        self.files = os.listdir(self.dirname)
-        self.files.sort()
-        self.files.insert(0, '..')
+        self.fs_iter = os.walk(self.dirname)
+        self.walk_res = self.fs_iter.next()
+        self.set_filelist_mode(mode_code)
 
     def get_pathname(self, tree_path):
         filename = self.files[tree_path.get_indices()[0]]
@@ -41,6 +51,21 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
 
     def get_column_names(self):
         return self.column_names[:]
+
+    def set_filelist_mode(self, mode_code=0):
+        sorting_actions = {
+            ListingOptions.MERGED_SORT:
+                lambda: sorted(self.walk_res[1]) + sorted(self.walk_res[2]),
+            ListingOptions.SORTED_MERGE:
+                lambda: sorted(self.walk_res[1] + self.walk_res[2]),
+            ListingOptions.UNSORTED:
+                lambda: self.walk_res[1] + self.walk_res[2],
+        }
+
+        self.files = sorting_actions[mode_code]()
+        self.files.insert(0, '..')
+
+        self.emit("filelist-mode-set", mode_code)
 
     # -------------------------------------------------------------------------
     # Interface implementation
