@@ -12,9 +12,11 @@ filepb = GdkPixbuf.Pixbuf.new_from_file_at_size('res/note.png', 16, 16)
 
 
 class ListingOptions(object):
-    MERGED_SORT = 0
-    SORTED_MERGE = 1
-    UNSORTED = 2
+    DEFAULT = 0
+    SHOW_PARENT = 1
+    HIDE_FILES = 2
+    MIX_FOLDERS_FILES = 4
+    NO_SORT = 8
 
 
 class FileListModel(GObject.Object, Gtk.TreeModel):
@@ -36,6 +38,8 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         self.fs_iter = os.walk(self.dirname)
         self.walk_res = self.fs_iter.next()
         self.set_filelist_mode(mode_code)
+        self.files = None
+        self.set_filelist_mode(mode_code)
 
     def get_pathname(self, tree_path):
         filename = self.files[tree_path.get_indices()[0]]
@@ -53,17 +57,29 @@ class FileListModel(GObject.Object, Gtk.TreeModel):
         return self.column_names[:]
 
     def set_filelist_mode(self, mode_code=0):
-        sorting_actions = {
-            ListingOptions.MERGED_SORT:
-                lambda: sorted(self.walk_res[1]) + sorted(self.walk_res[2]),
-            ListingOptions.SORTED_MERGE:
-                lambda: sorted(self.walk_res[1] + self.walk_res[2]),
-            ListingOptions.UNSORTED:
-                lambda: self.walk_res[1] + self.walk_res[2],
-        }
+        def sort(list1, list2, mixed):
+            if mixed:
+                return sorted(list1 + list2)
+            else:
+                return sorted(list1) + sorted(list2)
 
-        self.files = sorting_actions[mode_code]()
-        self.files.insert(0, '..')
+        list1 = self.walk_res[1]
+
+        if ListingOptions.HIDE_FILES & mode_code:
+            list2 = []
+        else:
+            list2 = self.walk_res[2]
+
+        if ListingOptions.NO_SORT & mode_code:
+            self.files = list1 + list2
+        else:
+            self.files = sort(
+                list1, list2,
+                ListingOptions.MIX_FOLDERS_FILES & mode_code
+            )
+
+        if ListingOptions.SHOW_PARENT & mode_code:
+            self.files.insert(0, '..')
 
         self.emit("filelist-mode-set", mode_code)
 
